@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LocalForge — Mode d'emploi</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Syne:wght@700;800&family=Inter:wght@400;500;600&display=swap');
+
+  :root {
+    --bg: #060a10;
+    --panel: #0b1120;
+    --card: #0f1828;
+    --border: #1a2e48;
+    --accent: #00e676;
+    --accentdk: #002d14;
+    --blue: #40c4ff;
+    --purple: #c084fc;
+    --purpledk: #1a0a2e;
+    --text: #c8dff5;
+    --muted: #4a6385;
+    --danger: #ff4f4f;
+    --white: #f0f8ff;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  /* Header */
+  .header {
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    padding: 24px 20px 20px;
+    text-align: center;
+  }
+
+  .logo {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+
+  .logo-icon {
+    width: 36px; height: 36px;
+    background: var(--accentdk);
+    border: 1px solid #00e67644;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+  }
+
+  .logo-text {
+    font-family: 'Syne', sans-serif;
+    font-size: 26px;
+    font-weight: 800;
+    color: var(--accent);
+    letter-spacing: 0.05em;
+  }
+
+  .subtitle {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  /* Main */
+  .container {
+    max-width: 680px;
+    margin: 0 auto;
+    padding: 24px 16px 60px;
+  }
+
+  /* Section title */
+  .section-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--white);
+    letter-spacing: 0.04em;
+    margin-bottom: 16px;
+    margin-top: 36px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .section-title::before {
+    content: '';
+    display: block;
+    width: 4px;
+    height: 22px;
+    background: var(--accent);
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+
+  /* Info box */
+  .info-box {
+    background: var(--accentdk);
+    border: 1px solid #00e67633;
+    border-radius: 12px;
+    padding: 18px;
+    margin-bottom: 24px;
+  }
+
+  .info-box p {
+    font-size: 15px;
+    color: var(--text);
+    line-height: 1.7;
+  }
+
+  .info-box strong {
+    color: var(--accent);
+  }
+
+  /* Step card */
+  .step {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px;
+    margin-bottom: 12px;
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+  }
+
+  .step-num {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--accentdk);
+    border: 2px solid var(--accent);
+    color: var(--accent);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 14px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .step-num.purple {
+    background: var(--purpledk);
+    border-color: var(--purple);
+    color: var(--purple);
+  }
+
+  .step-num.blue {
+    background: #00253d;
+    border-color: var(--blue);
+    color: var(--blue);
+  }
+
+  .step-body h3 {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--white);
+    margin-bottom: 6px;
+  }
+
+  .step-body p {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+
+  .step-body p strong {
+    color: var(--text);
+    font-weight: 500;
+  }
+
+  /* Code pill */
+  .pill {
+    display: inline-block;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 2px 8px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: var(--accent);
+  }
+
+  .pill.purple { color: var(--purple); }
+  .pill.blue { color: var(--blue); }
+  .pill.muted { color: var(--muted); }
+
+  /* Feature cards */
+  .features {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+
+  @media (max-width: 480px) {
+    .features { grid-template-columns: 1fr; }
+  }
+
+  .feature {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+  }
+
+  .feature-icon { font-size: 22px; margin-bottom: 8px; }
+  .feature h4 { font-size: 13px; font-weight: 600; color: var(--white); margin-bottom: 4px; }
+  .feature p { font-size: 12px; color: var(--muted); line-height: 1.5; }
+
+  /* Alert */
+  .alert {
+    background: #1a0606;
+    border: 1px solid #ff4f4f33;
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-top: 12px;
+    font-size: 13px;
+    color: #ff9999;
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+  }
+
+  .alert-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+
+  /* Tip */
+  .tip {
+    background: #00253d;
+    border: 1px solid #40c4ff33;
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-top: 12px;
+    font-size: 13px;
+    color: #90d8ff;
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+  }
+
+  /* Summary table */
+  .summary {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-top: 8px;
+  }
+
+  .summary-row {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+    align-items: center;
+  }
+
+  .summary-row:last-child { border-bottom: none; }
+
+  .summary-key {
+    padding: 12px 14px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.06em;
+    width: 140px;
+    flex-shrink: 0;
+    border-right: 1px solid var(--border);
+    background: var(--panel);
+  }
+
+  .summary-val {
+    padding: 12px 14px;
+    font-size: 13px;
+    color: var(--text);
+    flex: 1;
+  }
+
+  /* Divider */
+  .divider {
+    height: 1px;
+    background: var(--border);
+    margin: 32px 0;
+  }
+
+  /* Footer */
+  .footer {
+    text-align: center;
+    padding: 24px 16px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    border-top: 1px solid var(--border);
+    letter-spacing: 0.06em;
+  }
+
+  .footer span { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="logo">
+    <div class="logo-icon">⬡</div>
+    <div class="logo-text">LOCALFORGE</div>
+  </div>
+  <div class="subtitle">Mode d'emploi complet</div>
+</div>
+
+<div class="container">
+
+  <!-- À QUOI ÇA SERT ? -->
+  <div class="section-title">À quoi ça sert ?</div>
+
+  <div class="info-box">
+    <p>
+      <strong>LocalForge</strong> est votre atelier personnel pour créer et publier des applications web, 
+      <strong>sans payer d'abonnement</strong> à des services comme Netlify ou Emergent.sh.
+    </p>
+    <p style="margin-top:10px;">
+      Vous décrivez ce que vous voulez en français, <strong>Claude génère l'application</strong>, 
+      et vous pouvez la publier gratuitement sur Internet via <strong>GitHub Pages</strong>.
+    </p>
+  </div>
+
+  <div class="features">
+    <div class="feature">
+      <div class="feature-icon">⬡</div>
+      <h4>Générer avec l'IA</h4>
+      <p>Décrivez votre app en français, Claude la code pour vous en quelques secondes.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">🐙</div>
+      <h4>Publier gratuitement</h4>
+      <p>Déployez sur GitHub Pages. Votre app est en ligne, accessible à tous, zéro euro.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">📂</div>
+      <h4>Importer vos fichiers</h4>
+      <p>Vous avez déjà un fichier HTML ? Importez-le et déployez-le en un clic.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">↓</div>
+      <h4>Télécharger & partager</h4>
+      <p>Téléchargez votre app en .html ou ouvrez-la directement dans votre navigateur.</p>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- PARTIE 1 : CONFIGURATION -->
+  <div class="section-title">Partie 1 — Configuration initiale</div>
+  <p style="font-size:13px;color:var(--muted);margin-bottom:20px;">À faire une seule fois. Ensuite tout fonctionne automatiquement.</p>
+
+  <!-- Étape A : Clé Anthropic -->
+  <p style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:10px;">A. Obtenir votre clé Claude (IA)</p>
+
+  <div class="step">
+    <div class="step-num">1</div>
+    <div class="step-body">
+      <h3>Créer un compte Anthropic</h3>
+      <p>Allez sur <strong>console.anthropic.com</strong> et créez un compte gratuit.</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-num">2</div>
+    <div class="step-body">
+      <h3>Générer une clé API</h3>
+      <p>Une fois connecté : menu gauche → <strong>API Keys</strong> → <strong>Create Key</strong>. Copiez la clé <span class="pill">sk-ant-api03-...</span></p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-num">3</div>
+    <div class="step-body">
+      <h3>Saisir la clé dans LocalForge</h3>
+      <p>Dans LocalForge → <strong>⚙ Config.</strong> (en bas sur mobile) → onglet <span class="pill">⬡ Claude API</span> → collez la clé → <strong>Enregistrer</strong>.</p>
+    </div>
+  </div>
+
+  <div class="alert">
+    <span class="alert-icon">⚠</span>
+    <div>La génération d'apps avec Claude est payante à l'usage (quelques centimes par app). Ajoutez un peu de crédit sur console.anthropic.com → Billing.</div>
+  </div>
+
+  <br>
+
+  <!-- Étape B : GitHub -->
+  <p style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:10px;margin-top:8px;">B. Configurer GitHub (publication gratuite)</p>
+
+  <div class="step">
+    <div class="step-num purple">4</div>
+    <div class="step-body">
+      <h3>Créer un compte GitHub</h3>
+      <p>Allez sur <strong>github.com</strong> et créez un compte si ce n'est pas déjà fait. C'est gratuit.</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-num purple">5</div>
+    <div class="step-body">
+      <h3>Créer un token d'accès</h3>
+      <p>
+        Sur github.com : cliquez votre <strong>photo en haut à droite</strong> → <strong>Settings</strong><br>
+        → tout en bas à gauche : <strong>Developer settings</strong><br>
+        → <strong>Personal access tokens</strong> → <strong>Tokens (classic)</strong><br>
+        → <strong>Generate new token (classic)</strong><br>
+        → Donnez un nom (ex: LocalForge), cochez la case <span class="pill purple">repo</span><br>
+        → Cliquez <strong>Generate token</strong> en bas<br>
+        → Copiez le code <span class="pill purple">ghp_...</span> — il n'apparaît qu'une fois !
+      </p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-num purple">6</div>
+    <div class="step-body">
+      <h3>Saisir dans LocalForge</h3>
+      <p>Dans LocalForge → <strong>⚙ Config.</strong> → onglet <span class="pill purple">🐙 GitHub</span> → remplissez votre username et le token → <strong>Enregistrer</strong>.</p>
+    </div>
+  </div>
+
+  <div class="tip">
+    <span style="font-size:16px;flex-shrink:0;">💡</span>
+    <div>Cette configuration n'est faite qu'une seule fois. LocalForge mémorise tout dans votre navigateur.</div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- PARTIE 2 : CRÉER UNE APP -->
+  <div class="section-title">Partie 2 — Créer une application</div>
+
+  <div class="step">
+    <div class="step-num">1</div>
+    <div class="step-body">
+      <h3>Cliquer sur "+ Nouveau projet"</h3>
+      <p>En bas de l'écran sur mobile, ou en haut sur ordinateur.</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-num">2</div>
+    <div class="step-body">
+      <h3>Choisir une icône et un nom</h3>
+      <p>Sélectionnez une icône parmi celles proposées. Donnez un nom à votre projet (ex: <strong>Suivi de budget</strong>).</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-num">3</div>
+    <div class="step-body">
+      <h3>Décrire votre application</h3>
+      <p>Dans le champ <strong>"Prompt"</strong>, expliquez en français ce que vous voulez :<br>
+      <em>Ex : "Un tableau de bord avec un graphique de mes dépenses mensuelles et un formulaire pour ajouter des entrées."</em><br>
+      Plus vous êtes précis, meilleur sera le résultat.</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-num">4</div>
+    <div class="step-body">
+      <h3>Cliquer "⬡ Générer avec Claude"</h3>
+      <p>Claude génère votre application en 15 à 60 secondes. Vous verrez le code apparaître progressivement.</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-num">5</div>
+    <div class="step-body">
+      <h3>Votre app est prête !</h3>
+      <p>Elle s'ouvre automatiquement dans LocalForge. Vous pouvez la prévisualiser, la modifier, ou la publier.</p>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- PARTIE 3 : PUBLIER -->
+  <div class="section-title">Partie 3 — Publier sur Internet</div>
+
+  <div class="step">
+    <div class="step-num blue">1</div>
+    <div class="step-body">
+      <h3>Aller dans l'onglet "⚡ Actions"</h3>
+      <p>Quand votre projet est ouvert, appuyez sur l'onglet <span class="pill blue">⚡ Actions</span> en haut.</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-num blue">2</div>
+    <div class="step-body">
+      <h3>Cliquer "🐙 Déployer sur GitHub Pages"</h3>
+      <p>LocalForge crée automatiquement un dépôt sur GitHub et y publie votre app.</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-num blue">3</div>
+    <div class="step-body">
+      <h3>Attendre ~60 secondes</h3>
+      <p>GitHub prépare votre site. Une URL violette apparaît dans l'app :<br>
+      <span class="pill purple">votre-username.github.io/nom-projet</span></p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-num blue">4</div>
+    <div class="step-body">
+      <h3>Partager le lien !</h3>
+      <p>Ce lien est public, permanent, gratuit. Envoyez-le à qui vous voulez.</p>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- RÉCAPITULATIF -->
+  <div class="section-title">Récapitulatif des boutons</div>
+
+  <div class="summary">
+    <div class="summary-row">
+      <div class="summary-key">⬡ Générer</div>
+      <div class="summary-val">Créer une app avec l'IA à partir d'un texte</div>
+    </div>
+    <div class="summary-row">
+      <div class="summary-key">👁 Aperçu</div>
+      <div class="summary-val">Voir l'app en action dans la fenêtre</div>
+    </div>
+    <div class="summary-row">
+      <div class="summary-key">⚡ Actions</div>
+      <div class="summary-val">Publier, télécharger, ouvrir, supprimer</div>
+    </div>
+    <div class="summary-row">
+      <div class="summary-key">⟳ Modifier</div>
+      <div class="summary-val">Changer le prompt et régénérer l'app</div>
+    </div>
+    <div class="summary-row">
+      <div class="summary-key">🐙 GitHub</div>
+      <div class="summary-val">Publier ou mettre à jour sur Internet (gratuit)</div>
+    </div>
+    <div class="summary-row">
+      <div class="summary-key">↓ Télécharger</div>
+      <div class="summary-val">Sauvegarder le fichier .html sur votre appareil</div>
+    </div>
+    <div class="summary-row">
+      <div class="summary-key">⧉ Ouvrir</div>
+      <div class="summary-val">Lancer l'app dans un onglet de votre navigateur</div>
+    </div>
+    <div class="summary-row">
+      <div class="summary-key">⚙ Config.</div>
+      <div class="summary-val">Saisir vos clés API (Claude + GitHub)</div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- FAQ -->
+  <div class="section-title">Questions fréquentes</div>
+
+  <div class="step" style="flex-direction:column;gap:8px;">
+    <h3 style="color:var(--accent);font-size:14px;">Est-ce vraiment gratuit ?</h3>
+    <p style="font-size:13px;color:var(--muted);">GitHub Pages est 100% gratuit. Seule la génération IA (Claude) est payante à l'usage — environ 1 à 3 centimes par application générée selon sa complexité.</p>
+  </div>
+
+  <div class="step" style="flex-direction:column;gap:8px;">
+    <h3 style="color:var(--accent);font-size:14px;">Mes données sont-elles sécurisées ?</h3>
+    <p style="font-size:13px;color:var(--muted);">Vos clés API sont stockées uniquement dans votre navigateur, jamais envoyées ailleurs. Vos projets sont aussi sauvegardés localement dans votre navigateur.</p>
+  </div>
+
+  <div class="step" style="flex-direction:column;gap:8px;">
+    <h3 style="color:var(--accent);font-size:14px;">L'app générée ne me convient pas ?</h3>
+    <p style="font-size:13px;color:var(--muted);">Allez dans l'onglet <strong>⟳ Modifier</strong>, changez ou précisez votre description, et relancez la génération. Vous pouvez recommencer autant de fois que vous voulez.</p>
+  </div>
+
+  <div class="step" style="flex-direction:column;gap:8px;">
+    <h3 style="color:var(--accent);font-size:14px;">Je ferme le navigateur, je perds tout ?</h3>
+    <p style="font-size:13px;color:var(--muted);">Non. Vos projets sont sauvegardés automatiquement dans le navigateur. Ils seront là à votre retour, sauf si vous videz les données du navigateur.</p>
+  </div>
+
+</div>
+
+<div class="footer">
+  ⬡ <span>LOCALFORGE</span> — Votre plateforme de déploiement personnelle &amp; gratuite
+</div>
+
+</body>
+</html>
