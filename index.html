@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LocalForge</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:#060a10;height:100vh;overflow:hidden;}
+#root{height:100vh;}
+::-webkit-scrollbar{width:4px;height:4px;}
+::-webkit-scrollbar-track{background:#0b1120;}
+::-webkit-scrollbar-thumb{background:#1a2e48;border-radius:2px;}
+button:hover{filter:brightness(1.2);}
+input:focus,textarea:focus{border-color:#00e67655!important;outline:none;}
+textarea{resize:vertical;}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const{useState,useEffect,useRef,useCallback}=React;
+
+const C={bg:'#060a10',panel:'#0b1120',card:'#0f1828',border:'#1a2e48',borderHi:'#2a4a70',accent:'#00e676',accentDk:'#002d14',blue:'#40c4ff',blueDk:'#00253d',purple:'#c084fc',purpleDk:'#1a0a2e',text:'#c8dff5',muted:'#4a6385',danger:'#ff4f4f',warn:'#ffab40',white:'#f0f8ff'};
+const MONO="'IBM Plex Mono','Courier New',monospace";
+const HEAD="'Barlow Condensed','Arial Narrow',sans-serif";
+
+function useWidth(){const[w,setW]=useState(window.innerWidth);useEffect(()=>{const h=()=>setW(window.innerWidth);window.addEventListener('resize',h);return()=>window.removeEventListener('resize',h);},[]);return w;}
+const mob=w=>w<640;
+
+// Storage via localStorage (fonctionne partout sans Claude.ai)
+const loadProjects=()=>{try{const r=localStorage.getItem('lf_projects');return r?JSON.parse(r):[];}catch{return[];}};
+const saveProjects=p=>{try{localStorage.setItem('lf_projects',JSON.stringify(p));}catch{}};
+
+async function callGenerate(key,name,prompt,onChunk){
+  const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:8000,stream:true,system:"Tu es un expert developpeur web. Genere une application HTML complete et auto-contenue.\nSORTIE : uniquement le code HTML brut, zero fence markdown, zero explication.\nREGLES : HTML5 complet avec CSS+JS embarques. Design professionnel et responsive. Libs via CDN si besoin.",messages:[{role:'user',content:"App HTML \""+name+"\" : "+prompt}]})});
+  if(!res.ok){const e=await res.json();throw new Error(e.error?.message||'Erreur API');}
+  const reader=res.body.getReader();const dec=new TextDecoder();let html='';
+  while(true){const{done,value}=await reader.read();if(done)break;for(const line of dec.decode(value).split('\n')){if(!line.startsWith('data: '))continue;const d=line.slice(6);if(d==='[DONE]')continue;try{const p=JSON.parse(d);if(p.delta?.text){html+=p.delta.text;onChunk(html);}}catch{}}}
+  return html;
+}
+
+const GH='https://api.github.com';
+async function deployToGithub(token,user,slug,html){
+  const h={'Authorization':'Bearer '+token,'Accept':'application/vnd.github+json','Content-Type':'application/json','X-GitHub-Api-Version':'2022-11-28'};
+  const rc=await fetch(GH+'/repos/'+user+'/'+slug,{headers:h});
+  if(rc.status===404){const cr=await fetch(GH+'/user/repos',{method:'POST',headers:h,body:JSON.stringify({name:slug,description:'Via LocalForge',auto_init:true,private:false})});if(!cr.ok){const e=await cr.json();throw new Error(e.message||'Erreur repo');}await new Promise(r=>setTimeout(r,2000));}
+  else if(!rc.ok){const e=await rc.json();throw new Error(e.message);}
+  let sha;const fc=await fetch(GH+'/repos/'+user+'/'+slug+'/contents/index.html',{headers:h});if(fc.ok){const f=await fc.json();sha=f.sha;}
+  const b64=btoa(unescape(encodeURIComponent(html)));
+  const push=await fetch(GH+'/repos/'+user+'/'+slug+'/contents/index.html',{method:'PUT',headers:h,body:JSON.stringify({message:'Deploy via LocalForge',content:b64,...(sha?{sha}:{})})});
+  if(!push.ok){const e=await push.json();throw new Error(e.message||'Erreur push');}
+  await fetch(GH+'/repos/'+user+'/'+slug+'/pages',{method:'POST',headers:h,body:JSON.stringify({source:{branch:'main',path:'/'}})});
+  return'https://'+user+'.github.io/'+slug+'/';
+}
+
+const slugify=s=>s.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,40)||'app';
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2);
+const fmt=ts=>new Date(ts).toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'});
+const fmtSz=b=>b<1024?b+'o':b<1048576?(b/1024).toFixed(1)+'Ko':(b/1048576).toFixed(2)+'Mo';
+const openBlob=html=>window.open(URL.createObjectURL(new Blob([html],{type:'text/html'})),'_blank');
+const dlFile=(html,name)=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([html],{type:'text/html'}));a.download=slugify(name)+'.html';a.click();};
+
+const s={
+  btn:(col,bg)=>({display:'flex',alignItems:'center',justifyContent:'center',gap:6,background:bg||C.accentDk,color:col||C.accent,border:'1px solid '+(col||C.accent)+'44',borderRadius:8,padding:'10px 16px',cursor:'pointer',fontFamily:MONO,fontSize:12,fontWeight:600,transition:'all .15s',whiteSpace:'nowrap'}),
+  bsm:(col,bg)=>({display:'flex',alignItems:'center',justifyContent:'center',gap:4,background:bg||C.accentDk,color:col||C.accent,border:'1px solid '+(col||C.accent)+'44',borderRadius:6,padding:'7px 12px',cursor:'pointer',fontFamily:MONO,fontSize:11,fontWeight:600,transition:'all .15s',whiteSpace:'nowrap'}),
+  inp:()=>({background:C.panel,border:'1px solid '+C.border,borderRadius:8,color:C.text,padding:'12px 14px',fontFamily:MONO,fontSize:13,outline:'none',width:'100%',boxSizing:'border-box'}),
+  ta:()=>({background:C.panel,border:'1px solid '+C.border,borderRadius:8,color:C.text,padding:'12px 14px',fontFamily:MONO,fontSize:13,outline:'none',width:'100%',boxSizing:'border-box',resize:'vertical',lineHeight:1.6}),
+  lbl:()=>({color:C.muted,fontSize:10,fontFamily:MONO,letterSpacing:'0.1em',textTransform:'uppercase',marginBottom:8,display:'block'}),
+};
+
+function SettingsModal({ak0,gt0,gu0,onSave,onClose}){
+  const[tab,setTab]=useState('claude');
+  const[ak,setAk]=useState(ak0||'');
+  const[gt,setGt]=useState(gt0||'');
+  const[gu,setGu]=useState(gu0||'');
+  return(
+    <div style={{position:'fixed',inset:0,background:'rgba(6,10,16,.92)',display:'flex',alignItems:'flex-end',justifyContent:'center',zIndex:1000}}>
+      <div style={{background:C.card,border:'1px solid '+C.border,borderRadius:'16px 16px 0 0',padding:24,width:'100%',maxWidth:560,maxHeight:'90vh',overflowY:'auto'}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20}}>
+          <h2 style={{fontFamily:HEAD,fontSize:22,fontWeight:700,color:C.text,margin:0}}>PARAMETRES</h2>
+          <button onClick={onClose} style={{background:'none',border:'none',color:C.muted,fontSize:22,cursor:'pointer'}}>✕</button>
+        </div>
+        <div style={{display:'flex',marginBottom:20,background:C.panel,borderRadius:10,padding:4,border:'1px solid '+C.border}}>
+          {[['claude','⬡ Claude API'],['github','🐙 GitHub']].map(([t,l])=>(
+            <button key={t} onClick={()=>setTab(t)} style={{flex:1,padding:'10px 0',borderRadius:8,border:'none',cursor:'pointer',fontFamily:MONO,fontSize:12,fontWeight:600,background:tab===t?C.card:'transparent',color:tab===t?(t==='claude'?C.accent:C.purple):C.muted,transition:'all .15s'}}>{l}</button>
+          ))}
+        </div>
+        {tab==='claude'&&(
+          <>
+            <div style={{background:C.accentDk,border:'1px solid '+C.accent+'33',borderRadius:8,padding:'12px 14px',marginBottom:16}}>
+              <div style={{color:C.accent,fontSize:11,fontFamily:MONO,marginBottom:4}}>Ou trouver votre cle ?</div>
+              <div style={{color:C.text,fontSize:12,fontFamily:MONO,lineHeight:1.6}}>Allez sur <strong>console.anthropic.com</strong><br/>→ API Keys → Create Key</div>
+            </div>
+            <span style={s.lbl()}>Cle API Anthropic</span>
+            <input type="password" style={{...s.inp(),marginBottom:8}} value={ak} onChange={e=>setAk(e.target.value)} placeholder="sk-ant-api03-..."/>
+          </>
+        )}
+        {tab==='github'&&(
+          <>
+            <div style={{background:C.purpleDk,border:'1px solid '+C.purple+'33',borderRadius:8,padding:'12px 14px',marginBottom:16}}>
+              <div style={{color:C.purple,fontSize:11,fontFamily:MONO,marginBottom:4}}>Comment obtenir le token ?</div>
+              <div style={{color:C.text,fontSize:12,fontFamily:MONO,lineHeight:1.8}}>
+                1. github.com → photo profil → <strong>Settings</strong><br/>
+                2. En bas a gauche → <strong>Developer settings</strong><br/>
+                3. Personal access tokens → Tokens (classic)<br/>
+                4. Generate new token (classic)<br/>
+                5. Cochez la case <strong>repo</strong><br/>
+                6. Generate token → copiez <strong>ghp_...</strong>
+              </div>
+            </div>
+            <span style={s.lbl()}>Nom d'utilisateur GitHub</span>
+            <input style={{...s.inp(),marginBottom:14}} value={gu} onChange={e=>setGu(e.target.value)} placeholder="votre-username"/>
+            <span style={s.lbl()}>Personal Access Token</span>
+            <input type="password" style={{...s.inp(),marginBottom:8}} value={gt} onChange={e=>setGt(e.target.value)} placeholder="ghp_..."/>
+            {gu&&<div style={{color:C.purple,fontSize:11,fontFamily:MONO}}>{gu}.github.io/nom-projet</div>}
+          </>
+        )}
+        <div style={{display:'flex',gap:10,marginTop:16}}>
+          <button onClick={onClose} style={{...s.btn(C.muted,'transparent'),flex:1}}>Annuler</button>
+          <button onClick={()=>onSave({ak:ak.trim(),gt:gt.trim(),gu:gu.trim()})} style={{...s.btn(C.accent,C.accentDk),flex:2}}>✓ Enregistrer</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ProjectCard({project,onClick}){
+  return(
+    <div onClick={onClick} style={{background:C.card,border:'1px solid '+C.border,borderRadius:12,padding:18,cursor:'pointer',transition:'all .2s'}}>
+      <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:12}}>
+        <div style={{width:40,height:40,background:C.accentDk,border:'1px solid '+C.accent+'22',borderRadius:10,display:'flex',alignItems:'center',justifyContent:'center',fontSize:20}}>{project.icon||'📄'}</div>
+        <div style={{display:'flex',gap:6}}>
+          <span style={{background:'#0a2510',color:C.accent,fontSize:9,fontFamily:MONO,padding:'3px 8px',borderRadius:20,border:'1px solid '+C.accent+'33'}}>LOCAL</span>
+          {project.githubUrl&&<span style={{background:C.purpleDk,color:C.purple,fontSize:9,fontFamily:MONO,padding:'3px 8px',borderRadius:20,border:'1px solid '+C.purple+'33'}}>GITHUB</span>}
+        </div>
+      </div>
+      <div style={{fontFamily:MONO,fontSize:14,fontWeight:600,color:C.white,marginBottom:4,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{project.name}</div>
+      <div style={{fontFamily:MONO,fontSize:11,color:C.muted,marginBottom:10,lineHeight:1.5}}>{(project.description||'').slice(0,80)}</div>
+      {project.githubUrl&&<div onClick={e=>{e.stopPropagation();window.open(project.githubUrl,'_blank');}} style={{fontFamily:MONO,fontSize:10,color:C.purple,marginBottom:8,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',textDecoration:'underline'}}>🌐 {project.githubUrl}</div>}
+      <div style={{display:'flex',justifyContent:'space-between'}}>
+        <span style={{fontSize:10,fontFamily:MONO,color:C.muted}}>{fmtSz(project.html?.length||0)}</span>
+        <span style={{fontSize:10,fontFamily:MONO,color:C.muted}}>{fmt(project.updatedAt)}</span>
+      </div>
+    </div>
+  );
+}
+
+function Dashboard({projects,onOpen,onNew,onSettings}){
+  const w=useWidth();const m=mob(w);
+  return(
+    <div style={{padding:m?16:32,maxWidth:980}}>
+      {m&&<div style={{display:'flex',gap:10,marginBottom:20}}>
+        <button onClick={onNew} style={{...s.btn(C.accent,C.accentDk),flex:2,padding:'14px'}}>+ Nouveau projet</button>
+        <button onClick={onSettings} style={{...s.btn(C.purple,C.purpleDk),flex:1,padding:'14px'}}>⚙</button>
+      </div>}
+      {projects.length===0?(
+        <div style={{display:'flex',flexDirection:'column',alignItems:'center',paddingTop:m?40:80,gap:16,textAlign:'center'}}>
+          <div style={{fontSize:48,opacity:.2}}>⬡</div>
+          <div style={{fontFamily:HEAD,fontSize:m?22:28,fontWeight:700,color:C.text,letterSpacing:'0.04em'}}>AUCUN PROJET</div>
+          <div style={{color:C.muted,fontSize:13,fontFamily:MONO,lineHeight:1.7,maxWidth:320}}>Generez une app avec Claude ou importez un fichier HTML.<br/>Deployez gratuitement sur GitHub Pages.</div>
+          {!m&&<button onClick={onNew} style={{...s.btn(C.accent,C.accentDk),marginTop:8,padding:'14px 28px',fontSize:14}}>+ Creer un premier projet</button>}
+        </div>
+      ):(
+        <>
+          <div style={{fontFamily:HEAD,fontSize:m?24:32,fontWeight:700,color:C.text,marginBottom:20,letterSpacing:'0.03em'}}>VOS DEPLOIEMENTS <span style={{color:C.muted,fontSize:m?14:18,fontWeight:400}}>({projects.length})</span></div>
+          <div style={{display:'grid',gridTemplateColumns:m?'1fr':'repeat(auto-fill,minmax(270px,1fr))',gap:12}}>
+            {projects.map(p=><ProjectCard key={p.id} project={p} onClick={()=>onOpen(p)}/>)}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function CreateView({apiKey,onCreated,onCancel,onNeedKey}){
+  const[name,setName]=useState('');const[desc,setDesc]=useState('');const[prompt,setPrompt]=useState('');
+  const[icon,setIcon]=useState('🚀');const[tab,setTab]=useState('ai');
+  const[generating,setGenerating]=useState(false);const[progress,setProgress]=useState('');
+  const[liveHtml,setLiveHtml]=useState('');const[error,setError]=useState('');
+  const fileRef=useRef();const w=useWidth();const m=mob(w);
+  const ICONS=['🚀','📊','🎮','🛠️','📝','🗺️','📅','💬','🔒','🎨','🧮','📈'];
+
+  const handleGenerate=async()=>{
+    if(!apiKey){onNeedKey();return;}
+    if(!name.trim()||!prompt.trim()){setError('Nom et prompt requis.');return;}
+    setError('');setGenerating(true);setProgress('Connexion...');setLiveHtml('');
+    try{
+      const html=await callGenerate(apiKey,name.trim(),prompt.trim(),(chunk)=>{setLiveHtml(chunk);setProgress(fmtSz(chunk.length)+' generes');});
+      onCreated({id:uid(),name:name.trim(),description:desc.trim()||prompt.trim().slice(0,120),icon,html,prompt,createdAt:Date.now(),updatedAt:Date.now(),type:'ai'});
+    }catch(e){setError(e.message);setGenerating(false);}
+  };
+
+  const handleUpload=e=>{const file=e.target.files?.[0];if(!file)return;const r=new FileReader();r.onload=ev=>onCreated({id:uid(),name:name.trim()||file.name.replace('.html',''),description:desc.trim(),icon,html:ev.target.result,prompt:'',createdAt:Date.now(),updatedAt:Date.now(),type:'upload'});r.readAsText(file);};
+
+  return(
+    <div style={{height:'100%',overflowY:'auto',padding:m?16:28}}>
+      <button onClick={onCancel} style={{background:'none',border:'none',color:C.muted,cursor:'pointer',fontFamily:MONO,fontSize:12,marginBottom:16,padding:0}}>← Retour</button>
+      <h2 style={{fontFamily:HEAD,fontSize:m?22:26,fontWeight:700,color:C.text,margin:'0 0 4px',letterSpacing:'0.04em'}}>NOUVEAU PROJET</h2>
+      <p style={{color:C.muted,fontSize:12,fontFamily:MONO,margin:'0 0 20px',lineHeight:1.6}}>Generez avec Claude ou importez un HTML existant.</p>
+      <div style={{display:'flex',marginBottom:20,background:C.panel,borderRadius:10,padding:4,border:'1px solid '+C.border}}>
+        {[['ai','⬡ Generer avec IA'],['upload','↑ Importer HTML']].map(([t,l])=>(
+          <button key={t} onClick={()=>setTab(t)} style={{flex:1,padding:'10px 0',borderRadius:8,border:'none',cursor:'pointer',fontFamily:MONO,fontSize:12,fontWeight:600,background:tab===t?C.card:'transparent',color:tab===t?C.accent:C.muted,transition:'all .15s'}}>{l}</button>
+        ))}
+      </div>
+      <div style={{marginBottom:16}}>
+        <span style={s.lbl()}>Icone</span>
+        <div style={{display:'flex',flexWrap:'wrap',gap:8}}>
+          {ICONS.map(ic=><button key={ic} onClick={()=>setIcon(ic)} style={{width:40,height:40,borderRadius:10,border:'2px solid '+(ic===icon?C.accent:C.border),background:ic===icon?C.accentDk:C.panel,cursor:'pointer',fontSize:20,transition:'all .15s'}}>{ic}</button>)}
+        </div>
+      </div>
+      <div style={{marginBottom:14}}><span style={s.lbl()}>Nom du projet *</span><input style={s.inp()} value={name} onChange={e=>setName(e.target.value)} placeholder="Mon super outil..."/></div>
+      <div style={{marginBottom:14}}><span style={s.lbl()}>Description (optionnel)</span><input style={s.inp()} value={desc} onChange={e=>setDesc(e.target.value)} placeholder="Courte description..."/></div>
+      {tab==='ai'&&(
+        <>
+          <div style={{marginBottom:16}}><span style={s.lbl()}>Decrivez votre application *</span><textarea style={{...s.ta(),minHeight:120}} value={prompt} onChange={e=>setPrompt(e.target.value)} placeholder="Ex : Un tableau de suivi de budget avec graphiques et formulaire de saisie..."/></div>
+          {error&&<div style={{color:C.danger,fontSize:12,fontFamily:MONO,marginBottom:12,padding:'10px 14px',background:'#1a0606',borderRadius:8,border:'1px solid '+C.danger+'33'}}>{error}</div>}
+          <button onClick={handleGenerate} disabled={generating} style={{...s.btn(C.accent,C.accentDk),width:'100%',padding:'14px',fontSize:13,opacity:generating?.6:1,cursor:generating?'not-allowed':'pointer',marginBottom:16}}>
+            {generating?'↻ '+progress:'⬡ Generer avec Claude'}
+          </button>
+          {generating&&liveHtml&&<div style={{background:C.panel,border:'1px solid '+C.border,borderRadius:8,padding:12}}><div style={{color:C.accent,fontSize:11,fontFamily:MONO,marginBottom:6}}>● Generation en cours...</div><div style={{fontFamily:MONO,fontSize:10,color:'#7dd3a8',maxHeight:120,overflow:'hidden',lineHeight:1.4}}>{liveHtml.slice(0,400)}...</div></div>}
+        </>
+      )}
+      {tab==='upload'&&(
+        <div onClick={()=>fileRef.current?.click()} style={{border:'2px dashed '+C.border,borderRadius:12,padding:'40px 20px',textAlign:'center',cursor:'pointer'}}>
+          <div style={{fontSize:40,marginBottom:12}}>📂</div>
+          <div style={{color:C.text,fontSize:14,fontFamily:MONO,marginBottom:6}}>Appuyez pour selectionner</div>
+          <div style={{color:C.muted,fontSize:11,fontFamily:MONO}}>Fichier .html</div>
+          <input ref={fileRef} type="file" accept=".html" style={{display:'none'}} onChange={handleUpload}/>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DetailView({project,apiKey,ghToken,ghUser,onUpdate,onDelete,onNeedKey,onNeedGh,onBack}){
+  const[tab,setTab]=useState('preview');
+  const[regenPrompt,setRegenPrompt]=useState(project.prompt||'');
+  const[regenerating,setRegenerating]=useState(false);const[regenProg,setRegenProg]=useState('');const[liveRegen,setLiveRegen]=useState('');
+  const[confirmDel,setConfirmDel]=useState(false);
+  const[deploying,setDeploying]=useState(false);const[deployStatus,setDeployStatus]=useState('');const[deployError,setDeployError]=useState('');
+  const[copied,setCopied]=useState(false);
+  const w=useWidth();const m=mob(w);
+
+  useEffect(()=>{setRegenPrompt(project.prompt||'');setLiveRegen('');setTab('preview');setDeployError('');setDeployStatus('');},[project.id]);
+
+  const handleRegen=async()=>{
+    if(!apiKey){onNeedKey();return;}
+    setRegenerating(true);setLiveRegen('');
+    try{
+      const html=await callGenerate(apiKey,project.name,regenPrompt.trim(),(c)=>{setLiveRegen(c);setRegenProg(fmtSz(c.length));});
+      onUpdate({...project,html,prompt:regenPrompt.trim(),updatedAt:Date.now(),githubUrl:undefined});
+      setLiveRegen('');setTab('preview');setRegenerating(false);
+    }catch(e){alert(e.message);setRegenerating(false);}
+  };
+
+  const handleDeploy=async()=>{
+    if(!ghToken||!ghUser){onNeedGh();return;}
+    setDeploying(true);setDeployError('');setDeployStatus('Creation du repo...');
+    try{
+      const url=await deployToGithub(ghToken,ghUser,slugify(project.name),project.html);
+      setDeployStatus('Disponible dans ~60 secondes');
+      onUpdate({...project,githubUrl:url,updatedAt:Date.now()});
+    }catch(e){setDeployError(e.message);setDeployStatus('');}
+    setDeploying(false);
+  };
+
+  return(
+    <div style={{display:'flex',flexDirection:'column',height:'100%',overflow:'hidden'}}>
+      <div style={{padding:'12px 16px',background:C.panel,borderBottom:'1px solid '+C.border,flexShrink:0}}>
+        <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:project.githubUrl||deployError||deploying?8:0}}>
+          {m&&<button onClick={onBack} style={{background:'none',border:'none',color:C.muted,cursor:'pointer',fontSize:20,padding:0}}>←</button>}
+          <span style={{fontSize:20}}>{project.icon||'📄'}</span>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontFamily:MONO,fontSize:13,fontWeight:600,color:C.white,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{project.name}</div>
+            <div style={{fontFamily:MONO,fontSize:10,color:C.muted}}>{fmtSz(project.html?.length||0)} · {fmt(project.updatedAt)}</div>
+          </div>
+        </div>
+        {project.githubUrl&&!deployError&&<div style={{background:C.purpleDk,borderRadius:8,padding:'8px 12px',display:'flex',gap:8,alignItems:'center'}}><span style={{color:C.purple,fontSize:11}}>🐙</span><a href={project.githubUrl} target="_blank" rel="noopener" style={{color:C.purple,fontSize:11,fontFamily:MONO,textDecoration:'underline',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{project.githubUrl}</a></div>}
+        {deployError&&<div style={{background:'#1a0606',borderRadius:8,padding:'8px 12px',color:C.danger,fontSize:11,fontFamily:MONO}}>✗ {deployError}</div>}
+        {deploying&&<div style={{background:C.purpleDk,borderRadius:8,padding:'8px 12px',color:C.purple,fontSize:11,fontFamily:MONO}}>↻ {deployStatus}</div>}
+      </div>
+
+      <div style={{display:'flex',background:C.panel,borderBottom:'1px solid '+C.border,flexShrink:0}}>
+        {[['preview','👁 Apercu'],['actions','⚡ Actions'],['regen','⟳ Modif.']].map(([t,l])=>(
+          <button key={t} onClick={()=>setTab(t)} style={{flex:1,padding:'11px 4px',border:'none',background:'transparent',cursor:'pointer',fontFamily:MONO,fontSize:11,fontWeight:600,color:tab===t?C.accent:C.muted,borderBottom:tab===t?'2px solid '+C.accent:'2px solid transparent',transition:'all .15s'}}>{l}</button>
+        ))}
+      </div>
+
+      <div style={{flex:1,overflow:'hidden',display:'flex',flexDirection:'column'}}>
+        {tab==='preview'&&<iframe srcDoc={project.html} style={{flex:1,border:'none',background:'white'}} sandbox="allow-scripts allow-same-origin"/>}
+        {tab==='actions'&&(
+          <div style={{overflowY:'auto',flex:1,padding:16}}>
+            <div style={{display:'flex',flexDirection:'column',gap:10}}>
+              <button onClick={handleDeploy} disabled={deploying} style={{...s.btn(C.purple,C.purpleDk),padding:'16px',fontSize:13,opacity:deploying?.6:1}}>🐙 {project.githubUrl?'Re-deployer GitHub Pages':'Deployer sur GitHub Pages'}</button>
+              <button onClick={()=>openBlob(project.html)} style={{...s.btn(C.blue,C.blueDk),padding:'14px',fontSize:13}}>⧉ Ouvrir dans le navigateur</button>
+              <button onClick={()=>dlFile(project.html,project.name)} style={{...s.btn(C.accent,C.accentDk),padding:'14px',fontSize:13}}>↓ Telecharger .html</button>
+              <button onClick={()=>{navigator.clipboard.writeText('data:text/html;charset=utf-8,'+encodeURIComponent(project.html)).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2000);});}} style={{...s.btn(C.muted,'transparent'),padding:'14px',fontSize:13}}>{copied?'✓ Copie !':'⎘ Copier en Data URL'}</button>
+              <div style={{height:1,background:C.border,margin:'4px 0'}}/>
+              {!confirmDel?<button onClick={()=>setConfirmDel(true)} style={{...s.btn(C.danger,'#1a0606'),padding:'14px',fontSize:13}}>🗑 Supprimer</button>:<button onClick={onDelete} style={{...s.btn(C.danger,'#2a0a0a'),padding:'14px',fontSize:13}}>Confirmer la suppression</button>}
+            </div>
+            <div style={{marginTop:20,background:C.panel,borderRadius:10,border:'1px solid '+C.border,overflow:'hidden'}}>
+              {[['Nom',project.name],['Type',project.type==='ai'?'Genere par IA':'Importe'],['Taille',fmtSz(project.html?.length||0)],['Slug GitHub',slugify(project.name)],['Cree le',fmt(project.createdAt)]].map(([k,v])=>(
+                <div key={k} style={{display:'flex',gap:12,padding:'10px 14px',borderBottom:'1px solid '+C.border}}>
+                  <div style={{width:110,color:C.muted,fontSize:11,fontFamily:MONO,flexShrink:0}}>{k}</div>
+                  <div style={{color:C.text,fontSize:11,fontFamily:MONO,flex:1,wordBreak:'break-all'}}>{v}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {tab==='regen'&&(
+          <div style={{overflowY:'auto',flex:1,padding:16}}>
+            <span style={s.lbl()}>Modifier le prompt</span>
+            <textarea style={{...s.ta(),minHeight:160}} value={regenPrompt} onChange={e=>setRegenPrompt(e.target.value)}/>
+            <button onClick={handleRegen} disabled={regenerating} style={{...s.btn(C.accent,C.accentDk),marginTop:12,width:'100%',padding:'14px',fontSize:13,opacity:regenerating?.6:1,cursor:regenerating?'not-allowed':'pointer'}}>
+              {regenerating?'↻ '+regenProg+' generes':'⬡ Regenerer avec Claude'}
+            </button>
+            {regenerating&&liveRegen&&<div style={{marginTop:12,background:C.panel,borderRadius:8,padding:12,border:'1px solid '+C.border}}><div style={{color:C.accent,fontSize:11,fontFamily:MONO,marginBottom:6}}>● Streaming...</div><div style={{fontFamily:MONO,fontSize:10,color:'#7dd3a8',maxHeight:100,overflow:'hidden'}}>{liveRegen.slice(0,300)}...</div></div>}
+            {!regenerating&&project.html&&<div style={{marginTop:16,borderRadius:10,overflow:'hidden',border:'1px solid '+C.border}}><div style={{background:C.panel,padding:'8px 12px',fontSize:10,fontFamily:MONO,color:C.muted}}>Apercu actuel</div><iframe srcDoc={project.html} style={{width:'100%',height:300,border:'none',background:'white'}} sandbox="allow-scripts allow-same-origin"/></div>}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function App(){
+  const[projects,setProjects]=useState([]);
+  const[view,setView]=useState('dashboard');
+  const[current,setCurrent]=useState(null);
+  const[apiKey,setApiKey]=useState('');
+  const[ghToken,setGhToken]=useState('');
+  const[ghUser,setGhUser]=useState('');
+  const[showSettings,setShowSettings]=useState(false);
+  const w=useWidth();const m=mob(w);
+
+  useEffect(()=>{
+    setApiKey(localStorage.getItem('lf_key')||'');
+    setGhToken(localStorage.getItem('lf_gh_token')||'');
+    setGhUser(localStorage.getItem('lf_gh_user')||'');
+    setProjects(loadProjects());
+  },[]);
+
+  const updateProjects=useCallback(p=>{setProjects(p);saveProjects(p);},[]);
+  const openDetail=useCallback(proj=>{setCurrent(proj);setView('detail');},[]);
+  const deleteProject=useCallback(()=>{updateProjects(projects.filter(x=>x.id!==current?.id));setCurrent(null);setView('dashboard');},[projects,current,updateProjects]);
+  const saveSettings=({ak,gt,gu})=>{localStorage.setItem('lf_key',ak);setApiKey(ak);localStorage.setItem('lf_gh_token',gt);setGhToken(gt);localStorage.setItem('lf_gh_user',gu);setGhUser(gu);setShowSettings(false);};
+  const onProjectCreated=proj=>{const p=[proj,...projects];updateProjects(p);setCurrent(proj);setView('detail');};
+  const onProjectUpdated=updated=>{updateProjects(projects.map(x=>x.id===updated.id?updated:x));setCurrent(updated);};
+
+  return(
+    <div style={{display:'flex',flexDirection:'column',height:'100vh',background:C.bg,color:C.text,fontFamily:MONO,overflow:'hidden'}}>
+      {(!m||view==='dashboard')&&(
+        <div style={{display:'flex',alignItems:'center',padding:'0 16px',height:50,background:C.panel,borderBottom:'1px solid '+C.border,flexShrink:0,gap:10}}>
+          <div style={{display:'flex',alignItems:'center',gap:8,flex:1}}>
+            <div style={{width:26,height:26,background:C.accentDk,border:'1px solid '+C.accent+'44',borderRadius:6,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13}}>⬡</div>
+            <span style={{fontFamily:HEAD,fontSize:18,fontWeight:700,color:C.accent,letterSpacing:'0.04em'}}>LOCALFORGE</span>
+          </div>
+          {!m&&<>
+            <button onClick={()=>setView('create')} style={s.bsm(C.accent,C.accentDk)}>+ Nouveau</button>
+            <button onClick={()=>setShowSettings(true)} style={s.bsm(C.muted,'transparent')}>⚙ Params</button>
+          </>}
+        </div>
+      )}
+
+      <div style={{flex:1,display:'flex',overflow:'hidden'}}>
+        {!m&&(
+          <div style={{width:210,background:C.panel,borderRight:'1px solid '+C.border,display:'flex',flexDirection:'column',overflow:'hidden',flexShrink:0}}>
+            <div style={{padding:'10px 14px 6px',fontSize:9,fontFamily:MONO,color:C.muted,letterSpacing:'0.12em',textTransform:'uppercase'}}>Projets ({projects.length})</div>
+            <div style={{flex:1,overflowY:'auto'}}>
+              {projects.length===0?<div style={{padding:14,color:C.muted,fontSize:11,fontFamily:MONO,textAlign:'center',lineHeight:1.7}}>Aucun projet</div>
+                :projects.map(p=>(
+                  <button key={p.id} onClick={()=>openDetail(p)} style={{display:'block',width:'100%',textAlign:'left',padding:'10px 14px',background:current?.id===p.id?C.accentDk:'transparent',border:'none',borderLeft:current?.id===p.id?'2px solid '+C.accent:'2px solid transparent',cursor:'pointer',transition:'all .15s'}}>
+                    <div style={{color:current?.id===p.id?C.accent:C.text,fontSize:12,fontFamily:MONO,fontWeight:600,marginBottom:2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.name}</div>
+                    <div style={{display:'flex',gap:6,alignItems:'center'}}>
+                      <span style={{color:C.muted,fontSize:10}}>{fmtSz(p.html?.length||0)}</span>
+                      {p.githubUrl&&<span style={{color:C.purple,fontSize:9}}>● GH</span>}
+                    </div>
+                  </button>
+                ))
+              }
+            </div>
+          </div>
+        )}
+
+        <div style={{flex:1,overflow:'hidden',display:'flex',flexDirection:'column'}}>
+          {view==='dashboard'&&<Dashboard projects={projects} onOpen={openDetail} onNew={()=>setView('create')} onSettings={()=>setShowSettings(true)}/>}
+          {view==='create'&&<CreateView apiKey={apiKey} onCreated={onProjectCreated} onCancel={()=>setView('dashboard')} onNeedKey={()=>setShowSettings(true)}/>}
+          {view==='detail'&&current&&<DetailView project={current} apiKey={apiKey} ghToken={ghToken} ghUser={ghUser} onUpdate={onProjectUpdated} onDelete={deleteProject} onNeedKey={()=>setShowSettings(true)} onNeedGh={()=>setShowSettings(true)} onBack={()=>setView('dashboard')}/>}
+        </div>
+      </div>
+
+      {m&&view==='dashboard'&&(
+        <div style={{display:'flex',background:C.panel,borderTop:'1px solid '+C.border,flexShrink:0}}>
+          <button onClick={()=>setView('create')} style={{flex:2,padding:'14px',background:'none',border:'none',color:C.accent,fontFamily:MONO,fontSize:12,fontWeight:600,cursor:'pointer'}}>+ Nouveau projet</button>
+          <div style={{width:1,background:C.border}}/>
+          <button onClick={()=>setShowSettings(true)} style={{flex:1,padding:'14px',background:'none',border:'none',color:C.muted,fontFamily:MONO,fontSize:12,cursor:'pointer'}}>⚙ Config.</button>
+        </div>
+      )}
+
+      {showSettings&&<SettingsModal ak0={apiKey} gt0={ghToken} gu0={ghUser} onSave={saveSettings} onClose={()=>setShowSettings(false)}/>}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
